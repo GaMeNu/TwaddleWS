@@ -1,8 +1,6 @@
 import logging
 from typing import *
 
-import tornado.websocket
-
 from db_api import Database
 
 
@@ -30,7 +28,6 @@ class Events:
         @classmethod
         def get(cls, name: str) -> Callable:
             return cls.events.get(name)
-
 
     @classmethod
     def get_events(cls):
