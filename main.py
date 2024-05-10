@@ -3,13 +3,14 @@ import json
 import logging
 import socket
 import websockets
+from tornado import httputil
 from websockets import server
 from typing import *
 
 import tornado
 import tornado.websocket
 
-from sse_handling import ServerSideEventHandler
+from sse_handling import ServerSideEventHandler, Events
 
 from db_api import Database
 
@@ -32,39 +33,28 @@ app_log = logging.getLogger('tornado.application')
 logging.getLogger('tornado.application').addHandler(stream_handler)
 
 
-class Events:
-
-    handler = ServerSideEventHandler()
-
-    def __init__(self):
-        self.db = Database()
-        print(self.handler.handlers)
-
-    @handler.event("CREATE_USER")
-    async def create_user(self, data: dict):
-        self.db.register_user(
-            data.get("firebase_uid"),
-            data.get("usertag"),
-            data.get("username")
-        )
-
-
 class TwaddleWSServer(tornado.websocket.WebSocketHandler):
 
     # key = userID, value = Server instance.
     active_sockets = {}
-    events = Events()
+
+    def __init__(self, application: tornado.web.Application, request: httputil.HTTPServerRequest, **kwargs: Any):
+        super().__init__(application, request, **kwargs)
+        self.handler = ServerSideEventHandler()
 
     def open(self, *args: str, **kwargs: str):
         LOGGER.info("New connection established!")
 
     async def on_message(self, message: Union[str, bytes]):
         print(f"Received data:\n{message}")
-        await self.write_message(f"Confirmed.\n{message}")
 
         data = json.loads(message)
         if data.get("op") == 1:
-            await self.events.handler.handle(cname=self.events, received_data=data)
+            res = await self.handler.handle(data)
+            if res is not None:
+                print("SENDING FR FR NO CAP")
+                print(res)
+                await self.write_message(str(res))
 
     def on_close(self) -> None:
         print("Web socket closed.")
@@ -86,9 +76,8 @@ def main(port: int, ip: str):
     )
     app.listen(port=PORT, address=IP)
 
-    print(f"{ip}:{port}")
-
-    LOGGER.debug(f"Started server! Listening on ws://{ip}:{port}/")
+    LOGGER.info(f"Started server! Listening on\nws://{ip}:{port}/")
+    LOGGER.info(f"Loaded EVENTS: {Events.get_events()}")
 
     ioloop = tornado.ioloop.IOLoop.current()
     ioloop.start()
