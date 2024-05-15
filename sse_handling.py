@@ -80,22 +80,36 @@ class Events:
     async def create_user_chat(self, event: str, data: dict):
         user_tag = data.get("recv_user_tag")
         orig_user_id = data.get("orig_user_id")
-        user = self.db.get_user_by_tag(user_tag)
 
+        user = self.db.get_user_by_tag(user_tag)
+        print(user)
         if user is None:
             return Events._prepare_event_resp(event, False)
 
+        if self.db.get_chat_by_users((orig_user_id, user.user_id)) is not None:
+            return Events._prepare_event_resp(event, False)
+
         res = self.db.create_user_chat(orig_user_id, user.user_id)
+        print(res)
 
         if res is None:
             return Events._prepare_event_resp(event, False)
 
         return self._prepare_event_resp(event, True, {
-            "chat_id": res.chat_id
+            "chat_id": res.chat_id,
+            "name": res.name
         })
 
+    @Registry.register("LOAD_USER_CHATS")
     async def load_user_chats(self, event: str, data: dict):
-        pass
+        user_id = data.get("user_id")
+        print("data")
+
+        res = self.db.load_user_chats(user_id)
+        res_srz = [chat.serialize() for chat in res]
+        return self._prepare_event_resp(event, True, {
+            "chats": res_srz
+        })
 
 
 class ServerSideEventHandler:

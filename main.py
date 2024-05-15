@@ -54,7 +54,7 @@ class TwaddleWSServer(tornado.websocket.WebSocketHandler):
             if res is not None:
                 print("SENDING FR FR NO CAP")
                 print(res)
-                await self.write_message(str(res))
+                await self.write_message(json.dumps(res))
 
     def on_close(self) -> None:
         print("Web socket closed.")
