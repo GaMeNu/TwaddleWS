@@ -139,6 +139,8 @@ class Database:
         if res is None:
             return None
 
+        print(res)
+
         return User.from_tuple(res)
 
     def get_chat_by_users(self, users: tuple[int]) -> Chat | None:
@@ -302,8 +304,6 @@ AND user_id = %s""",
     def load_user_chats(self, user_id: int):
         chats = self.get_user_chats(user_id)
         res = []
-        print(chats)
-        print(user_id)
         for chat_tup in chats:
             res.append(self.get_display_chat(chat_tup[0], user_id))
         return res
