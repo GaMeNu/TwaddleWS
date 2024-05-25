@@ -1,10 +1,17 @@
 import datetime
 import math
+import os
 from abc import abstractmethod
 from typing import *
-
 import psycopg2
 from psycopg2 import errors as pgerr
+from dotenv import load_dotenv
+
+
+load_dotenv()
+
+USERNAME = os.getenv("DB_USERNAME")
+PASSWORD = os.getenv("DB_PASSWORD")
 
 
 class ToDict:
@@ -112,8 +119,8 @@ class Database:
     def __init__(self):
         self.connection = psycopg2.connect(
             dbname="twaddle_db",
-            user="twaddle_gateway",
-            password="password",
+            user=USERNAME,
+            password=PASSWORD,
             host="localhost",
             port=5432
         )
