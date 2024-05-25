@@ -27,7 +27,7 @@ class Chat:
         return cls(*tup)
 
 
-class Message:
+class Message(ToDict):
     def __init__(self,
                  message_id: int,
                  chat_id: int,
@@ -37,12 +37,18 @@ class Message:
         self.message_id = message_id
         self.chat_id = chat_id
         self.author_id = author_id
-        self.time_sent = time_sent
+        if isinstance(time_sent, datetime.datetime):
+            self.time_sent = math.floor(time_sent.timestamp())
+        else:
+            self.time_sent = time_sent
         self.content = content
 
     @classmethod
     def from_tuple(cls, tup: tuple):
         return cls(*tup)
+
+    def serialize(self):
+        return self.__dict__
 
 
 class DisplayChat(ToDict):
@@ -60,7 +66,10 @@ class DisplayChat(ToDict):
         self.unreads = unreads
         self.last_message = last_message
         self.last_msg_preview = last_msg_preview
-        self.time_last_msg = time_last_msg
+        if isinstance(time_last_msg, datetime.datetime):
+            self.time_last_msg = math.floor(time_last_msg.timestamp())
+        else:
+            self.time_last_msg = time_last_msg
 
     def serialize(self):
         return {
@@ -73,7 +82,7 @@ class DisplayChat(ToDict):
         }
 
 
-class User:
+class User(ToDict):
 
     def __init__(self,
                  user_id: int,
@@ -81,14 +90,22 @@ class User:
                  user_tag: str,
                  user_name: str
                  ):
-        self.user_id = user_id
-        self.firebase_id = firebase_id
-        self.user_tag = user_tag
-        self.user_name = user_name
+        self.user_id: int = user_id
+        self.firebase_id: str = firebase_id
+        self.user_tag: str = user_tag
+        self.user_name: str = user_name
 
     @classmethod
     def from_tuple(cls, tup: Tuple):
         return cls(*tup)
+
+    def serialize(self):
+        return {
+            "user_id": self.user_id,
+            "firebase_id": self.firebase_id,
+            "user_name": self.user_name,
+            "user_tag": self.user_tag
+        }
 
 
 class Database:
@@ -143,7 +160,7 @@ class Database:
 
         return User.from_tuple(res)
 
-    def get_chat_by_users(self, users: tuple[int]) -> Chat | None:
+    def get_chat_by_users(self, users: tuple[int, ...]) -> Chat | None:
         with self.connection.cursor() as crsr:
             crsr.execute("""SELECT chat_id
 FROM chats_users
@@ -160,7 +177,7 @@ HAVING COUNT(DISTINCT user_id) = %s;""", (users, len(users)))
 
             return Chat.from_tuple(res)
 
-    def get_chat_messages(self, chat_id: int):
+    def get_chat_messages_tuples(self, chat_id: int) -> list[tuple]:
         with self.connection.cursor() as crsr:
             crsr.execute("""SELECT * 
 FROM messages 
@@ -200,17 +217,12 @@ AND user_id = %s""",
         # Should only happen in userchats, where there are 2 users.
         if name is None:
             uids = self.get_chat_user_ids(chat_id)
-            print(uids)
-            uids_new = []
 
             # We need to pop out the uids that aren't ours, should only occur once exactly but meh
-            for i in range(len(uids)):
-                print(i)
-                tup = uids[i]
-                if tup[0] != user_id:
-                    uids_new.append(tup)
+            uids_new = [uid for uid in uids if uid != user_id]
+
             # aand set the name!
-            name = self.get_user(uids_new[0][0]).user_name
+            name = self.get_user(uids_new[0]).user_name
 
         # We want to get the last message in the chat now, so we can get its data for the preview
         last_msg = self.get_last_message_in_chat(chat_id)
@@ -231,7 +243,7 @@ AND user_id = %s""",
         # Count unreads until the last READ message.
         unreads: int = 0
         if lrm_id != 0:
-            msg_tups = self.get_chat_messages(chat_id)
+            msg_tups = self.get_chat_messages_tuples(chat_id)
             for tup in msg_tups:
                 msg = Message.from_tuple(tup)
                 if msg.message_id == lrm_id:
@@ -274,11 +286,12 @@ AND user_id = %s""",
             res = crsr.fetchall()
         return res
 
-    def get_chat_user_ids(self, chat_id: int):
+    def get_chat_user_ids(self, chat_id: int) -> list[int]:
         with self.connection.cursor() as crsr:
             crsr.execute("SELECT user_id FROM chats_users WHERE chat_id = %s", (chat_id,))
             res = crsr.fetchall()
-        return res
+
+        return [val[0] for val in res]
 
     def get_last_message_in_chat(self, chat_id) -> Message | None:
         with self.connection.cursor() as crsr:
@@ -307,6 +320,49 @@ AND user_id = %s""",
         for chat_tup in chats:
             res.append(self.get_display_chat(chat_tup[0], user_id))
         return res
+
+    def get_chat_users(self, chat_id: int) -> list[User]:
+        user_ids = self.get_chat_user_ids(chat_id)
+        return [self.get_user(user_id) for user_id in user_ids]
+
+    def get_chat_messages(self, chat_id: int) -> list[Message]:
+        msgs = self.get_chat_messages_tuples(chat_id)
+        return [Message.from_tuple(msg) for msg in msgs]
+
+    def mark_chat_as_read(self, chat_id: int, user_id: int):
+        msg = self.get_last_message_in_chat(chat_id)
+
+        if msg is None:
+            return
+
+        with self.connection.cursor() as crsr:
+            crsr.execute("""UPDATE chats_users 
+SET last_read_message = %s 
+WHERE chat_id = %s 
+AND user_id = %s""",
+                         (msg.message_id, chat_id, user_id))
+
+        self.connection.commit()
+
+    def create_new_message(self, chat_id: int, user_id: int, content: str):
+        now = datetime.datetime.now()
+        with self.connection.cursor() as crsr:
+            crsr.execute("""INSERT INTO messages 
+(chat_id, author_id, time_sent, content) 
+VALUES (%s, %s, %s, %s);
+SELECT currval(pg_get_serial_sequence('messages', 'message_id'));""",
+                         (chat_id, user_id, now, content))
+            res = crsr.fetchone()
+            self.connection.commit()
+        if res is None:
+            return None
+        return Message(
+            res[0],
+            chat_id,
+            user_id,
+            math.floor(now.timestamp()),
+            content
+        )
 
 
 db = Database()

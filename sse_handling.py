@@ -1,7 +1,7 @@
 import logging
 from typing import *
 
-from db_api import Database
+from db_api import Database, User
 
 
 class BaseSSEException(Exception):
@@ -45,7 +45,7 @@ class Events:
 
     def __init__(self, ws):
         self.db = Database()
-        self.ws = ws
+        self.ws: 'TwaddleWSServer' = ws
 
     @staticmethod
     def _prepare_event_resp(event: str,
@@ -90,9 +90,9 @@ class Events:
     @Registry.register("CREATE_USER_CHAT")
     async def create_user_chat(self, event: str, data: dict):
         user_tag = data.get("recv_user_tag")
-        orig_user_id = data.get("orig_user_id")
+        orig_user_id: int = data.get("orig_user_id")
 
-        user = self.db.get_user_by_tag(user_tag)
+        user: User = self.db.get_user_by_tag(user_tag)
         if user is None:
             return Events._prepare_event_resp(event, False)
 
@@ -121,6 +121,21 @@ class Events:
         res_srz = [chat.serialize() for chat in res]
         return self._prepare_event_resp(event, True, {
             "chats": res_srz
+        })
+
+    @Registry.register("LOAD_SINGLE_CHAT")
+    async def load_single_chat(self, event: str, data: dict):
+        chat_id = data.get("chat_id")
+
+        msgs = self.db.get_chat_messages(chat_id)
+        users = self.db.get_chat_users(chat_id)
+
+        msgs_ls = [msg.serialize() for msg in msgs]
+        users_ls = [user.serialize() for user in users]
+
+        return self._prepare_event_resp(event, True, {
+            "users": users_ls,
+            "messages": msgs_ls
         })
 
 
