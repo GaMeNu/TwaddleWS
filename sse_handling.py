@@ -1,7 +1,8 @@
 import logging
 from typing import *
 
-from db_api import Database, User
+from db_api import Database, User, Chat
+from utils import is_valid_tag
 
 
 class BaseSSEException(Exception):
@@ -10,7 +11,6 @@ class BaseSSEException(Exception):
 
 class EventNotFoundException(BaseSSEException):
     pass
-
 
 class Events:
 
@@ -67,6 +67,9 @@ class Events:
 
     @Registry.register("CREATE_USER")
     async def create_user(self, event: str, data: dict):
+        if not is_valid_tag(data.get("usertag")):
+            return Events._prepare_event_resp(event, False)
+
         res = self.db.register_user(
             data.get("firebase_uid"),
             data.get("usertag"),
@@ -117,6 +120,7 @@ class Events:
         user_id = data.get("user_id")
 
         res = self.db.load_user_chats(user_id)
+        res.sort(key=lambda x: x.time_last_msg, reverse=True)
         print(res)
         res_srz = [chat.serialize() for chat in res]
         return self._prepare_event_resp(event, True, {
@@ -137,6 +141,34 @@ class Events:
             "users": users_ls,
             "messages": msgs_ls
         })
+
+    @Registry.register("UPDATE_DETAILS")
+    async def update_details(self, event: str, data: dict):
+        user_id = data.get("user_id")
+        firebase_id = data.get("firebase_id")
+        username = data.get("user_name")
+        user_tag = data.get("user_tag")
+
+        if not is_valid_tag(user_tag):
+            return Events._prepare_event_resp(event, False)
+
+        old_user = self.db.get_user(user_id)
+        if old_user.user_tag != user_tag \
+                and self.db.get_user_by_tag(user_tag) is not None:
+            return self._prepare_event_resp(event, False)
+
+        user_obj = User(
+            user_id,
+            firebase_id,
+            user_tag,
+            username
+        )
+
+        res = self.db.update_user(user_obj)
+
+        return self._prepare_event_resp(event, res, user_obj.serialize())
+
+
 
 
 class ServerSideEventHandler:

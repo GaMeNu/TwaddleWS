@@ -371,5 +371,18 @@ SELECT currval(pg_get_serial_sequence('messages', 'message_id'));""",
             content
         )
 
+    def update_user(self, user: User):
+        with self.connection.cursor() as crsr:
+            crsr.execute("""UPDATE users 
+SET user_tag = %s, user_name = %s 
+WHERE user_id = %s;
+SELECT * FROM users WHERE user_id = %s""",
+                         (user.user_tag, user.user_name, user.user_id, user.user_id))
+            res = crsr.fetchone()
+            self.connection.commit()
+        if res is None:
+            return False
+        return True
+
 
 db = Database()
