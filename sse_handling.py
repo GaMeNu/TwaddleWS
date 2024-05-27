@@ -1,7 +1,7 @@
 import logging
 from typing import *
 
-from db_api import Database, User, Chat
+from db_api import Database, User
 from utils import is_valid_tag
 
 
