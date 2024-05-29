@@ -12,8 +12,8 @@ class BaseSSEException(Exception):
 class EventNotFoundException(BaseSSEException):
     pass
 
-class Events:
 
+class Events:
     class Registry:
         events: dict[str, list[Callable]] = {}
 
