@@ -70,6 +70,9 @@ class Events:
         if not is_valid_tag(data.get("usertag")):
             return Events._prepare_event_resp(event, False)
 
+        if self.db.get_user_by_tag(data.get("usertag")) is not None:
+            return Events._prepare_event_resp(event, False)
+
         res = self.db.register_user(
             data.get("firebase_uid"),
             data.get("usertag"),

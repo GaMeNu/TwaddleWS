@@ -153,6 +153,8 @@ class Database:
         with self.connection.cursor() as crsr:
             crsr.execute("SELECT * FROM users WHERE firebase_id = %s", (fuid,))
             res = crsr.fetchone()
+        if res is None:
+            return None
         return User.from_tuple(res)
 
     def get_user_by_tag(self, usertag: str):

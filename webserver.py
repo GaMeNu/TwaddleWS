@@ -49,11 +49,18 @@ class WSEvents:
     @registry.register("LOGIN_USER")
     async def login_set_active(self, event: str, data: dict):
         user = self.db.get_user_by_fuid(data.get("firebase_id"))
+        if user is None:
+            return
         self.ws.set_active(user.user_id)
         print(TwaddleWSServer.active_sockets)
 
     @registry.register("LOAD_SINGLE_CHAT")
     async def sc_mark_read(self, event: str, data: dict):
+        chat_id = data.get("chat_id")
+        self.db.mark_chat_as_read(chat_id, self.ws.user_id)
+
+    @registry.register("MARK_AS_READ")
+    async def mark_as_read(self, event: str, data: dict):
         chat_id = data.get("chat_id")
         self.db.mark_chat_as_read(chat_id, self.ws.user_id)
 
