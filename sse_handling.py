@@ -172,9 +172,10 @@ class Events:
         return self._prepare_event_resp(event, res, user_obj.serialize())
 
 
-
-
 class ServerSideEventHandler:
+    """
+    Handles server event management
+    """
 
     def __init__(self, ws, handler: logging.Handler = None):
         self.log = logging.Logger("SSEH")

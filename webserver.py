@@ -22,6 +22,9 @@ logging.getLogger('tornado.application').addHandler(stream_handler)
 
 
 class WSEvents:
+    """
+    This is for handling events that need to talk to the WebServer directly
+    """
     registry = Events.Registry
 
     @staticmethod
@@ -29,6 +32,13 @@ class WSEvents:
                             success: bool,
                             data: dict | None = None
                             ):
+        """
+        This method creates an event response
+        :param event: event code
+        :param success: whether the event was successful
+        :param data: JSONable dictionary
+        :return: the prepared response
+        """
         resp = {
             "op": 1,
             "data": {
@@ -42,12 +52,18 @@ class WSEvents:
 
         return resp
 
-    def __init__(self, ws):
+    def __init__(self, ws: 'TwaddleWSServer'):
         self.ws: TwaddleWSServer = ws
         self.db = self.ws.handler.events.db
 
     @registry.register("LOGIN_USER")
     async def login_set_active(self, event: str, data: dict):
+        """
+        Adds a user's WebSocket connection to the active WS's dicts
+        :param event:
+        :param data:
+        :return:
+        """
         user = self.db.get_user_by_fuid(data.get("firebase_id"))
         if user is None:
             return
@@ -56,16 +72,34 @@ class WSEvents:
 
     @registry.register("LOAD_SINGLE_CHAT")
     async def sc_mark_read(self, event: str, data: dict):
+        """
+        Mark the read chat as read
+        :param event:
+        :param data:
+        :return:
+        """
         chat_id = data.get("chat_id")
         self.db.mark_chat_as_read(chat_id, self.ws.user_id)
 
     @registry.register("MARK_AS_READ")
     async def mark_as_read(self, event: str, data: dict):
+        """
+        Special event to mark chat as read
+        :param event:
+        :param data:
+        :return:
+        """
         chat_id = data.get("chat_id")
         self.db.mark_chat_as_read(chat_id, self.ws.user_id)
 
     @registry.register("SEND_CHAT_MESSAGE")
     async def send_chat_message(self, event: str, data: dict):
+        """
+        Sends a chat message event to the other users in the chat
+        :param event:
+        :param data:
+        :return:
+        """
         chat_id = int(data.get("chat_id"))
         user_id = self.ws.user_id
         content = data.get("content")
@@ -117,18 +151,26 @@ class TwaddleWSServer(tornado.websocket.WebSocketHandler):
         print(f"Received data:\n{message}")
 
         data = json.loads(message)
+        # If is a server event redirect to the event handler
         if data.get("op") == 1:
             res_ls = await self.handler.handle(data)
             for res in res_ls:
                 if res is None:
                     continue
 
+                # Sent the result/response back
                 print("SENDING")
                 print(res)
                 await self.write_message(json.dumps(res))
 
     @staticmethod
     async def send_new_message(msg: Message, users: tuple[int]):
+        """
+        Send a message event to all users in a chat
+        :param msg: Message object to send back
+        :param users:
+        :return:
+        """
         msg_srz = msg.serialize()
         for user in users:
             instance = TwaddleWSServer.get_active_socket(user)
